@@ -1,91 +1,64 @@
-package com.example.notesgraph.ui.draw
+name: Android CI
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
 
-/** Простой холст для рисования от руки. Точки хранятся как список штрихов. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun DrawingCanvas(onClose: () -> Unit) {
-    val strokes = remember { mutableStateListOf<List<Offset>>() }
-    var current by remember { mutableStateOf<List<Offset>>(emptyList()) }
+permissions:
+  contents: read
 
-    Dialog(
-        onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Рисунок") },
-                    actions = {
-                        IconButton(onClick = { strokes.clear() }) {
-                            Icon(Icons.Filled.Delete, contentDescription = "Очистить")
-                        }
-                        IconButton(onClick = onClose) {
-                            Icon(Icons.Filled.Check, contentDescription = "Готово")
-                        }
-                    }
-                )
-            }
-        ) { pad ->
-            Canvas(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(pad)
-                    .background(Color.White)
-                    .pointerInput(Unit) {
-                        detectDragGestures(
-                            onDragStart = { current = listOf(it) },
-                            onDrag = { change, _ -> current = current + change.position },
-                            onDragEnd = {
-                                strokes.add(current)
-                                current = emptyList()
-                            }
-                        )
-                    }
-            ) {
-                val allStrokes = strokes + listOf(current)
-                allStrokes.forEach { pts ->
-                    if (pts.size > 1) {
-                        val path = Path()
-                        path.moveTo(pts.first().x, pts.first().y)
-                        for (i in 1 until pts.size) {
-                            path.lineTo(pts[i].x, pts[i].y)
-                        }
-                        drawPath(
-                            path = path,
-                            color = Color.Black,
-                            style = Stroke(width = 6f, cap = StrokeCap.Round)
-                        )
-                    }
-                }
-            }
-        }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Ensure Gradle wrapper
+        run: |
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Wrapper jar missing, generating..."
+            gradle wrapper --gradle-version 8.7
+          fi
+          chmod +x ./gradlew || true
+
+      # Собираем и одновременно пишем весь вывод в build.log
+      - name: Build debug APK
+        id: build
+        run: |
+          set -o pipefail
+          ./gradlew assembleDebug --stacktrace --console=plain 2>&1 | tee build.log
+
+      # Если сборка упала — печатаем ТОЛЬКО строки с реальными ошибками
+      - name: Show compile errors
+        if: failure()
+        run: |
+          echo "================ ONLY ERROR LINES ================"
+          grep -nE "^e:|error:|\[ksp\]|\[Room\]" build.log || echo "No e:/error: lines found"
+
+      - name: Upload full log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: warn
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
