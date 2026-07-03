@@ -3,7 +3,8 @@ package com.example.notesgraph.ui.draw
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
@@ -13,7 +14,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -31,63 +37,55 @@ fun DrawingCanvas(onClose: () -> Unit) {
     val strokes = remember { mutableStateListOf<List<Offset>>() }
     var current by remember { mutableStateOf<List<Offset>>(emptyList()) }
 
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Scaffold(
             topBar = {
                 TopAppBar(
                     title = { Text("Рисунок") },
                     actions = {
-                        IconButton(onClick = { strokes.clear() }) { Icon(Icons.Filled.Delete, null) }
-                        IconButton(onClick = onClose) { Icon(Icons.Filled.Check, null) }
+                        IconButton(onClick = { strokes.clear() }) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Очистить")
+                        }
+                        IconButton(onClick = onClose) {
+                            Icon(Icons.Filled.Check, contentDescription = "Готово")
+                        }
                     }
                 )
             }
         ) { pad ->
             Canvas(
-                Modifier.fillMaxSize().padding(pad).background(Color.White)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(pad)
+                    .background(Color.White)
                     .pointerInput(Unit) {
                         detectDragGestures(
                             onDragStart = { current = listOf(it) },
                             onDrag = { change, _ -> current = current + change.position },
-                            onDragEnd = { strokes.add(current); current = emptyList() }
+                            onDragEnd = {
+                                strokes.add(current)
+                                current = emptyList()
+                            }
                         )
                     }
             ) {
-                (strokes + listOf(current)).forEach { pts ->
+                val allStrokes = strokes + listOf(current)
+                allStrokes.forEach { pts ->
                     if (pts.size > 1) {
-                        val path = Path().apply {
-                            moveTo(pts.first().x, pts.first().y)
-                            pts.drop(1).forEach { lineTo(it.x, it.y) }
+                        val path = Path()
+                        path.moveTo(pts.first().x, pts.first().y)
+                        for (i in 1 until pts.size) {
+                            path.lineTo(pts[i].x, pts[i].y)
                         }
-                        drawPath(path, Color.Black, style = Stroke(width = 6f, cap = StrokeCap.Round))
+                        drawPath(
+                            path = path,
+                            color = Color.Black,
+                            style = Stroke(width = 6f, cap = StrokeCap.Round)
+                        )
                     }
                 }
             }
         }
-    }
-}                )
-            }
-        ) { pad ->
-            Canvas(
-                Modifier.fillMaxSize().padding(pad).background(Color.White)
-                    .pointerInput(Unit) {
-                        detectDragGestures(
-                            onDragStart = { current = listOf(it) },
-                            onDrag = { change, _ -> current = current + change.position },
-                            onDragEnd = { strokes.add(current); current = emptyList() }
-                        )
-                    }
-            ) {
-                (strokes + listOf(current)).forEach { pts ->
-                    if (pts.size > 1) {
-                        val path = Path().apply {
-                            moveTo(pts.first().x, pts.first().y)
-                            pts.drop(1).forEach { lineTo(it.x, it.y) }
-                        }
-                        drawPath(path, Color.Black, style = Stroke(width = 6f, cap = StrokeCap.Round))
-                    }
-                }
-            }
-        }
-    }
-}
